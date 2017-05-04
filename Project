@@ -1,0 +1,289 @@
+#include <cv.h>
+#include <highgui.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/opencv.hpp>
+#include <opencv2/videoio/videoio.hpp>
+#include <ctime>
+#include <stdio.h>
+
+using namespace cv;
+using namespace std;
+
+class Region {
+private:
+
+	Mat previousPreviousFrame;
+	Mat previousFrame;
+	Mat currentFrame;
+
+	int xROI;
+	int yROI;
+	int widthROI;
+	int heightROI;
+	bool firstTime;
+	int Mean;
+	int SumMean;
+	int AverageMean;
+	int Threshold;
+	bool below;
+	int countObject;
+	bool Capture;
+	bool HTMLFirstTime;
+	bool writeHTML;
+
+
+public:
+
+	Region() {
+		xROI = 150;
+		yROI = 150;
+		widthROI = 100;
+		heightROI = 100;
+		firstTime = true;
+		Mean = 0;
+		SumMean = 0;
+		AverageMean = 0;
+		Threshold = 0;
+		below = true;
+		countObject =0;
+		Capture = false;
+		HTMLFirstTime = true;
+		writeHTML = false;
+	}
+
+	void setROI (int Input_xROI, int Input_yROI, int Input_widthROI, int Input_heightROI){
+		xROI = Input_xROI;
+		yROI = Input_yROI;
+		widthROI = Input_widthROI;
+		heightROI = Input_heightROI;
+	}
+
+	void drawROI (Mat InputFrame, Scalar InputColor){
+		rectangle (InputFrame, Rect(xROI, yROI, widthROI, heightROI), InputColor, 2);
+		if (Mean > Threshold){
+			rectangle (InputFrame, Rect(xROI, yROI, widthROI, heightROI), Scalar (0, 255, 0), 2);
+		}
+	}
+
+	int calMean (Mat InputFrame){
+		Mat DiffPrevious;
+		Mat GrayDiffPrevious;
+
+		int SumWeight = 0;
+		int Weight;
+
+
+		if (firstTime){
+			InputFrame.copyTo(currentFrame);
+			InputFrame.copyTo(previousFrame);
+			firstTime = false;
+		}
+		currentFrame.copyTo(previousFrame);
+		InputFrame.copyTo(currentFrame);
+
+
+
+		absdiff(previousFrame, currentFrame, DiffPrevious);
+
+		cvtColor(DiffPrevious, GrayDiffPrevious, CV_BGR2GRAY);
+
+		for (int y = yROI; y < yROI + heightROI; y++) {
+			for (int x = xROI; x < xROI + widthROI; x++){
+
+				Weight = GrayDiffPrevious.at<unsigned char>(y,x);
+				SumWeight = SumWeight + Weight;
+			}
+		}
+
+		Mean = SumWeight / (widthROI * heightROI);
+
+		return Mean;
+	}
+
+
+
+	int calThreshold (int frameCount, int thresholdFactor){
+		SumMean = SumMean + Mean;
+		AverageMean = (SumMean / (frameCount + 1)) + 3;
+		Threshold = (int)(AverageMean * thresholdFactor);
+		return Threshold;
+	}
+
+	int CountingAndCapturing (char InputFileName[100], char InputSaveImage[100], Mat InputFrame){
+		if (below == true and Mean > Threshold){
+			countObject++;
+			below = false;
+			sprintf( InputFileName, InputSaveImage, countObject);
+			Mat Capture (InputFrame, Rect (xROI, yROI - heightROI, widthROI, heightROI + 50));
+			imwrite (InputFileName, Capture);
+		}
+		if (below == false and Mean < Threshold){
+			below = true;
+		}
+	return countObject;
+	}
+
+	void PutTextInROI (Mat InputFrame, Scalar InputColor){
+		putText( InputFrame, format("%d", countObject), Point(xROI + (widthROI/4), yROI + ((3*heightROI)/4)), FONT_HERSHEY_PLAIN, 2, InputColor, 3, 5);
+	}
+
+	void Graph (Mat InputGraph, string InputGrapWindow,int frameCount){
+		line (InputGraph, Point(frameCount % 300, 0), Point(frameCount % 300, 256), Scalar (0, 0, 0), 1);
+		line (InputGraph, Point(frameCount % 300, 0), Point (frameCount % 300, Mean), Scalar (0, 255, 0), 1);
+		circle (InputGraph, Point (frameCount % 300, Threshold), 1, Scalar(0, 0, 255), 1);
+		flip (InputGraph, InputGraph, 0);
+		imshow (InputGrapWindow, InputGraph);
+		flip (InputGraph, InputGraph, 0);
+	}
+
+
+	void DisplayPassObject (Mat InputFrame, string InputObPassWindow){
+
+		if (Mean > Threshold and Capture == false){
+			Capture = true;
+			Mat Capture (InputFrame, Rect (xROI, yROI - heightROI, widthROI, heightROI + 50));
+			imshow (InputObPassWindow, Capture);
+		}
+		if (Mean < Threshold and Capture == true){
+			Capture = false;
+
+		}
+	}
+
+
+
+	void InputHTML (FILE *InputFilePointer, char InputFileName[100], char InputHTMLImage[100], char LaneName[50]){
+		if (HTMLFirstTime){
+
+			InputFilePointer = fopen("objects.html","w");
+			fprintf( InputFilePointer,"<html>\n   <body>\n");
+			fclose(InputFilePointer);
+			HTMLFirstTime = false;
+		}
+
+		if (writeHTML == false and Mean > Threshold){
+			writeHTML = true;
+			InputFilePointer = fopen("objects.html","a");
+
+
+			sprintf( InputFileName, InputHTMLImage, countObject);
+
+
+			time_t now = time(0);
+			char*date = ctime(&now);
+
+
+			fprintf( InputFilePointer, "<img src=%s><br>\n" ,InputFileName);
+			fprintf( InputFilePointer, "Vechicle number %d in %s <br>\n", countObject, LaneName);
+			fprintf( InputFilePointer, "%s <br>\n" , date);
+
+
+			fclose(InputFilePointer);
+		}
+
+		if (writeHTML == true and Mean < Threshold){
+			writeHTML = false;
+		}
+	}
+
+
+
+};
+
+
+int main(  int argc, char** argv ) {
+
+	int frameCount;
+	int Total = 0;
+	Mat RawFrame;
+	Mat DrawFrame;
+	Mat GraphLane1 = Mat(256,300, CV_8UC3);
+	Mat GraphLane2 = Mat(256,300, CV_8UC3);
+	char FileLane1[100];
+	char FileLane11[100];
+	char FileLane2[100];
+	char FileLane21[100];
+
+
+	Region Lane1;
+	Region Lane2;
+
+	Lane1.setROI (225, 300, 150, 120);
+	Lane2.setROI (385, 300, 170, 120);
+
+	string VideoFileName = ("project.mp4");
+	VideoCapture cap (VideoFileName);
+	if (!cap.isOpened()){
+		return -1;
+	}
+
+	namedWindow("Video", CV_WINDOW_NORMAL);
+	namedWindow("DrawVideo", CV_WINDOW_NORMAL);
+	namedWindow("GraphLane1", CV_WINDOW_NORMAL);
+	namedWindow("GraphLane2", CV_WINDOW_NORMAL);
+	namedWindow("PassObjectLane1", CV_WINDOW_NORMAL);
+	namedWindow("PassObjectLane2", CV_WINDOW_NORMAL);
+
+
+	FILE *file;
+
+
+	for (frameCount = 1; frameCount < 1000000000; frameCount++){
+		if (frameCount % 100 == 0){
+			printf("frameCount = %d \n", frameCount);
+		}
+
+		if (cap.read(RawFrame) == NULL){
+			cap.open(VideoFileName);
+			cap >> RawFrame;
+		}
+
+		cap >> RawFrame;
+		imshow("Video", RawFrame);
+		RawFrame.copyTo(DrawFrame);
+
+		Lane1.drawROI( DrawFrame, Scalar(0,0,255));
+		Lane1.calMean(RawFrame);
+		Lane1.calThreshold(frameCount, 1.25);
+		Lane1.CountingAndCapturing(FileLane1, "Lane1-%d.JPEG", RawFrame);
+		Lane1.PutTextInROI(DrawFrame, Scalar (0, 0, 255));
+		Lane1.Graph (GraphLane1, "GraphLane1",frameCount);
+		Lane1.DisplayPassObject(RawFrame, "PassObjectLane1");
+		Lane1.InputHTML(file, FileLane11, "Lane1-%d.JPEG", "Lane 1");
+
+
+
+		Lane2.drawROI( DrawFrame, Scalar(255,0,0));
+		Lane2.calMean(RawFrame);
+		Lane2.calThreshold(frameCount, 1.25);
+		Lane2.CountingAndCapturing(FileLane2, "Lane2-%d.JPEG", RawFrame);
+		Lane2.PutTextInROI(DrawFrame, Scalar (255, 0, 0));
+		Lane2.Graph (GraphLane2, "GraphLane2",frameCount);
+		Lane2.DisplayPassObject(RawFrame, "PassObjectLane2");
+		Lane2.InputHTML(file, FileLane21, "Lane2-%d.JPEG", "Lane 2");
+
+		Total = Lane1.CountingAndCapturing(FileLane1, "Lane1-%d.jpg", RawFrame) + Lane2.CountingAndCapturing(FileLane2, "Lane2-%d.jpg", RawFrame);
+
+
+
+
+		time_t now = time(0);
+		char*date = ctime(&now);
+		putText( DrawFrame, format("%s", date), Point(5,25), FONT_HERSHEY_PLAIN, 2, Scalar(250,0,200), 3, 5);
+
+
+		putText( DrawFrame, format("Cars: %d", Total), Point(5,50), FONT_HERSHEY_PLAIN, 2, Scalar(250,200,0), 3, 5);
+
+
+		imshow("DrawVideo", DrawFrame);
+
+		if (waitKey(20) >= 0){
+			break;
+		}
+	}
+
+	printf("Final frameCount = %d \n", frameCount);
+	return 0;
+}
