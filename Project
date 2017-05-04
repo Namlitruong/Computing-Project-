@@ -32,6 +32,7 @@ private:
 	bool Capture;
 	bool HTMLFirstTime;
 	bool writeHTML;
+	int ObLength;
 
 
 public:
@@ -51,6 +52,7 @@ public:
 		Capture = false;
 		HTMLFirstTime = true;
 		writeHTML = false;
+		ObLength = 0;
 	}
 
 	void setROI (int Input_xROI, int Input_yROI, int Input_widthROI, int Input_heightROI){
@@ -166,20 +168,12 @@ public:
 		if (writeHTML == false and Mean > Threshold){
 			writeHTML = true;
 			InputFilePointer = fopen("objects.html","a");
-
-
 			sprintf( InputFileName, InputHTMLImage, countObject);
-
-
 			time_t now = time(0);
 			char*date = ctime(&now);
-
-
 			fprintf( InputFilePointer, "<img src=%s><br>\n" ,InputFileName);
 			fprintf( InputFilePointer, "Vechicle number %d in %s <br>\n", countObject, LaneName);
 			fprintf( InputFilePointer, "%s <br>\n" , date);
-
-
 			fclose(InputFilePointer);
 		}
 
@@ -187,6 +181,20 @@ public:
 			writeHTML = false;
 		}
 	}
+
+
+	void Classify (){
+		if (Mean > Threshold){
+			ObLength ++;
+		}else{
+//			printf ("ObLength = %d \n", ObLength);
+			ObLength = 0;
+		}
+	}
+
+
+
+
 
 
 
@@ -205,6 +213,8 @@ int main(  int argc, char** argv ) {
 	char FileLane11[100];
 	char FileLane2[100];
 	char FileLane21[100];
+
+	int Oblength = 0;
 
 
 	Region Lane1;
@@ -244,14 +254,24 @@ int main(  int argc, char** argv ) {
 		imshow("Video", RawFrame);
 		RawFrame.copyTo(DrawFrame);
 
-		Lane1.drawROI( DrawFrame, Scalar(0,0,255));
-		Lane1.calMean(RawFrame);
-		Lane1.calThreshold(frameCount, 1.25);
-		Lane1.CountingAndCapturing(FileLane1, "Lane1-%d.JPEG", RawFrame);
-		Lane1.PutTextInROI(DrawFrame, Scalar (0, 0, 255));
-		Lane1.Graph (GraphLane1, "GraphLane1",frameCount);
-		Lane1.DisplayPassObject(RawFrame, "PassObjectLane1");
-		Lane1.InputHTML(file, FileLane11, "Lane1-%d.JPEG", "Lane 1");
+//		Lane1.drawROI( DrawFrame, Scalar(0,0,255));
+//		Lane1.calMean(RawFrame);
+//		Lane1.calThreshold(frameCount, 1.25);
+//		Lane1.CountingAndCapturing(FileLane1, "Lane1-%d.JPEG", RawFrame);
+//		Lane1.PutTextInROI(DrawFrame, Scalar (0, 0, 255));
+//		Lane1.Graph (GraphLane1, "GraphLane1",frameCount);
+//		Lane1.DisplayPassObject(RawFrame, "PassObjectLane1");
+//		Lane1.InputHTML(file, FileLane11, "Lane1-%d.JPEG", "Lane 1");
+//		Lane1.Classify();
+
+//		if (Lane2.Classify() == 1){
+//			Oblength ++;
+//			printf ("ObLength = %d \n", Oblength);
+//		}else{
+//			Oblength = 0;
+//		}
+
+
 
 
 
@@ -263,8 +283,9 @@ int main(  int argc, char** argv ) {
 		Lane2.Graph (GraphLane2, "GraphLane2",frameCount);
 		Lane2.DisplayPassObject(RawFrame, "PassObjectLane2");
 		Lane2.InputHTML(file, FileLane21, "Lane2-%d.JPEG", "Lane 2");
+		Lane2.Classify();
 
-		Total = Lane1.CountingAndCapturing(FileLane1, "Lane1-%d.jpg", RawFrame) + Lane2.CountingAndCapturing(FileLane2, "Lane2-%d.jpg", RawFrame);
+//		Total = Lane1.CountingAndCapturing(FileLane1, "Lane1-%d.jpg", RawFrame) + Lane2.CountingAndCapturing(FileLane2, "Lane2-%d.jpg", RawFrame);
 
 
 
